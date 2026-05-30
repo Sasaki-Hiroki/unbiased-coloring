@@ -109,7 +109,11 @@
     border-radius: 2px;
     transition: all 0.2s ease;
   }
-  button:hover  { background: #ffffff; color: #111111; }
+  /* ホバー反転はマウス環境のみ。タッチ端末では tap 後に hover が固着し
+     白黒の反転が外れたままになるため、(hover: hover) で限定する */
+  @media (hover: hover) {
+    button:hover { background: #ffffff; color: #111111; }
+  }
   button:active { transform: scale(0.97); }
   button:disabled { opacity: 0.3; cursor: not-allowed; }
 
@@ -148,16 +152,27 @@
       text-align: left;
     }
 
+    /* デザイン周囲の白枠（キャンバス内の余白）を切り取り、
+       黒い外枠の大きさそのままで表示する。
+       フレームは canvas 中央に左右上下 33px の対称位置にあるため、
+       overflow:hidden + 中央スケールで均等にトリミングできる。 */
     .artwork {
       grid-area: artwork;
       width: 100%;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+      aspect-ratio: 648 / 468;   /* トリミング後（720-72 / 540-72）の比率 */
+      overflow: hidden;
+      background: none;
+      box-shadow: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     canvas {
       width: 100% !important;
       height: auto !important;
-      aspect-ratio: 720 / 540;
+      transform: scale(1.1111);  /* 720 / 648 — 内枠を箱幅いっぱいに拡大 */
+      transform-origin: center;
     }
 
     button {
@@ -493,8 +508,14 @@ function render(){
   ctx.restore();
 
   ctx.strokeStyle='#18130E';
-  ctx.lineWidth=FRAME_W;
+  // スマホでは黒い外枠を少し太くする（トリミング位置 33px と整合）
+  ctx.lineWidth = isMobile() ? 8 : FRAME_W;
   ctx.strokeRect(FX,FY,FW,FH);
+}
+
+// 表示環境がスマホ幅（CSS の @media と同条件）かどうか
+function isMobile(){
+  return window.matchMedia('(max-width: 900px)').matches;
 }
 
 // ── Build mesh ───────────────────────────────────────────
@@ -555,38 +576,35 @@ function nextColoring(){
   busy=true;
   document.getElementById('colorBtn').disabled=true;
 
-  let retries=0;
-
   function attempt(){
-    const success=computeFaceLabel();
-    if(!success){
-      // 100ms 以内に配色できなかった → 新しい乱数で mesh を再生成して再試行
-      if(++retries>30){
-        // 安全弁: 30回試みても解けなければ中止
-        document.getElementById('colorBtn').disabled=false;
-        busy=false;
-        return;
-      }
-      for(let i=0;i<30;i++){mesh=buildMesh();if(mesh)break;}
-      setTimeout(attempt,0); // UI スレッドへ一度制御を返してから再試行
-      return;
+    // mesh 形状は固定のまま配色だけ振り直す。
+    // タイムアウト（100ms 以内に配色できない）時は mesh を作り直さず、
+    // 直前の配色をそのまま保持する。
+    if(computeFaceLabel()){
+      colored=true;
+      render();
     }
-    colored=true;
-    render();
     document.getElementById('colorBtn').disabled=false;
     busy=false;
   }
 
-  colored=true;
   setTimeout(attempt,10);
 }
 
 // ── Init ─────────────────────────────────────────────────
 (function init(){
-  for(let i=0;i<30;i++){mesh=buildMesh();if(mesh)break;}
+  // 初回のみ、4彩色可能な mesh が得られるまで形状を生成して確定させる。
+  // 以降のボタン操作では mesh 形状は変更しない。
+  for(let tries=0;tries<60;tries++){
+    for(let i=0;i<30;i++){mesh=buildMesh();if(mesh)break;}
+    if(mesh && computeFaceLabel()){colored=true;break;}
+  }
   render();
-  nextColoring();
 })();
+
+// PC ⇄ スマホ間でレイアウトが切り替わったら、枠の太さを合わせて再描画
+// （mesh 形状・配色は保持したまま見た目だけ更新）
+window.matchMedia('(max-width: 900px)').addEventListener('change', render);
 </script>
 </body>
 </html>
