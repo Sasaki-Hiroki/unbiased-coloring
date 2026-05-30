@@ -113,17 +113,57 @@
   button:active { transform: scale(0.97); }
   button:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  /* スマホ等、画面が小さい場合は縦並びに変更 */
-  @media (max-width: 1000px) {
+  /* スマホ: タイトル→説明→デザイン→ボタン の縦並び */
+  @media (max-width: 900px) {
+    body {
+      padding: 24px 16px;
+      align-items: flex-start;
+    }
+
+    /* コンテナをグリッドに切り替え */
     .container {
-      flex-direction: column;
-      gap: 40px;
+      display: grid;
+      grid-template-areas:
+        "title"
+        "desc"
+        "artwork"
+        "btn";
+      grid-template-columns: 1fr;
+      gap: 20px;
     }
-    .artwork canvas {
+
+    /* caption を透過させて子要素をグリッドへ直接参加させる */
+    .caption {
+      display: contents;
+    }
+
+    h1.title {
+      grid-area: title;
+      margin-bottom: 0;
+    }
+
+    p.desc {
+      grid-area: desc;
+      margin-bottom: 0;
+      text-align: left;
+    }
+
+    .artwork {
+      grid-area: artwork;
       width: 100%;
-      height: auto;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
     }
-    .caption { max-width: 100%; }
+
+    canvas {
+      width: 100% !important;
+      height: auto !important;
+      aspect-ratio: 720 / 540;
+    }
+
+    button {
+      grid-area: btn;
+      align-self: start;
+    }
   }
 </style>
 </head>
@@ -263,7 +303,7 @@ function delaunay(pts){
 
 // ── DSATUR 4-coloring ────────────────────────────────────
 function dsatur(n, adj){
-  const deadline=performance.now()+2000;
+  const deadline=performance.now()+100; // 100ms で打ち切り
   const colors=new Int32Array(n).fill(-1);
   const nbS=Array.from({length:n},()=>new Set());
   const deg=adj.map(a=>a.length);
@@ -314,10 +354,11 @@ function computeFaceLabel(){
   const nPts=pts.length;
 
   let raw=null;
-  for(let attempt=0;attempt<10;attempt++){
-    try{raw=dsatur(nPts,adj);if(raw&&raw.reduce((m,c)=>Math.max(m,c),0)<=3)break;}
-    catch(e){raw=null;}
-  }
+  // 1回だけ試みる。タイムアウトなら false を返して呼び出し元が再試行する
+  try{
+    raw=dsatur(nPts,adj);
+    if(raw&&raw.reduce((m,c)=>Math.max(m,c),0)>3) raw=null;
+  } catch(e){ raw=null; }
   if(!raw)return false;
 
   const perm=randPerm4();
@@ -513,13 +554,31 @@ function nextColoring(){
   if(busy)return;
   busy=true;
   document.getElementById('colorBtn').disabled=true;
-  setTimeout(()=>{
+
+  let retries=0;
+
+  function attempt(){
+    const success=computeFaceLabel();
+    if(!success){
+      // 100ms 以内に配色できなかった → 新しい乱数で mesh を再生成して再試行
+      if(++retries>30){
+        // 安全弁: 30回試みても解けなければ中止
+        document.getElementById('colorBtn').disabled=false;
+        busy=false;
+        return;
+      }
+      for(let i=0;i<30;i++){mesh=buildMesh();if(mesh)break;}
+      setTimeout(attempt,0); // UI スレッドへ一度制御を返してから再試行
+      return;
+    }
     colored=true;
-    computeFaceLabel();
     render();
     document.getElementById('colorBtn').disabled=false;
     busy=false;
-  },10);
+  }
+
+  colored=true;
+  setTimeout(attempt,10);
 }
 
 // ── Init ─────────────────────────────────────────────────
