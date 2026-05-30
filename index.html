@@ -178,6 +178,17 @@
     button {
       grid-area: btn;
       align-self: start;
+      justify-self: center;   /* 横いっぱいに伸びないよう内容幅に・中央寄せ */
+      /* スマホは白地・黒文字・黒枠で軽やかに（黒フレームと線のトーンを揃える） */
+      background: #ffffff;
+      color: #111111;
+      border: 1.5px solid #111111;
+      letter-spacing: 0.18em;
+    }
+    /* タップ時だけ黒地に反転して押下感を出す */
+    button:active {
+      background: #111111;
+      color: #ffffff;
     }
   }
 </style>
